@@ -11,6 +11,8 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <condition_variable> 
+
 
 // The output of a public-private key pair generator
 struct KeyPair {
@@ -44,7 +46,8 @@ enum class [[nodiscard]] Status {
     data_loss_error
 };
 
-
+std::condition_variable cv;
+bool clientDone = false;
 
 template <typename T>
 using StatusOr = std::expected<T, Status>;
@@ -231,39 +234,116 @@ StatusOr<uint64_t> decrypt(uint64_t c, uint64_t n, uint64_t k_d) {
    return decrypted_message;
 }
 
-void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent) {
+
+void printHorizontalLine() {
+    std::cout << "-------------------------------------------------------------" << std::endl;
+}
+
+void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent, std::string message, std::vector<uint64_t>& encryptedMessage) {
     std::unique_lock<std::mutex> lock(sharedMutex);
+    printHorizontalLine();
     std::cout << "clientThread() :: t0 starting" << std::endl;
     StatusOr<uint64_t> encryptedKey = encrypt(t0Keys.k_d, t0Keys.n, t1Keys.k_e);
     if (encryptedKey.has_value()) {
-        std::cout << "Sending key: " << encryptedKey.value() << std::endl;
+        std::cout << "Sending key:: " << encryptedKey.value() << std::endl;
         keySent = static_cast<int>(encryptedKey.value());
     } else {
-        std::cerr << "Error encrypting key: " << static_cast<int>(encryptedKey.error()) << std::endl;
+        std::cerr << "Error encrypting key:: " << static_cast<int>(encryptedKey.error()) << std::endl;
     }
+    
+    std::cout << "Encrypting message:: " << message << std::endl;
+    for (auto ch : message) {
+        uint64_t temp = static_cast<uint64_t>(ch);
+        
+        // encrypting to statusor
+        StatusOr<uint64_t> result = encrypt(temp, t0Keys.n, t0Keys.k_e);
+        // Checking statusor value
+        if (result.has_value()) {
+            // pushing to result vector
+            encryptedMessage.push_back(result.value());
+        } else {
+            std::cerr << "Encryption error: " << std::endl;
+        }
+    }
+    std::cout << "Sending message:: ";
+   for (auto itc : encryptedMessage) {
+        std::cout << itc;
+    }
+   std::cout << std::endl;
+    printHorizontalLine();
+    clientDone = true;
+    cv.notify_one();
+    (void) message;
     (void) t0Keys;
     (void) t1Keys;
 }
 
-void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent) {
+
+void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent, std::string message, std::vector<uint64_t>& encryptedMessage) {
     std::unique_lock<std::mutex> lock(sharedMutex);
+    cv.wait(lock, [&] { return clientDone; });
     std::cout << "serverThread() :: t1 starting" << std::endl;
     std::cout << "Recieving key::  " << keySent << std::endl;
+    std::cout << "Recieving message:: ";
+    std::vector<char> decryptedMessage;
+    for (auto itc : encryptedMessage) {
+        std::cout << itc;
+    }
+    std::cout << std::endl;
+    std::cout << "Decrypting:: WAIT" << std::endl;
+    uint64_t dec; 
+    StatusOr<uint64_t> decryptedKey = decrypt(static_cast<uint64_t>(keySent), t0Keys.n, t1Keys.k_d);
+    if (decryptedKey.has_value()) {
+        dec = decryptedKey.value();
+    }
+     for (uint64_t encryptedValue : encryptedMessage) {
+        StatusOr<uint64_t> decryptResult = decrypt(encryptedValue, t0Keys.n, t0Keys.k_d);
+        if (decryptResult.has_value()) {
+            char decryptedChar = static_cast<char>(decryptResult.value());
+            decryptedMessage.push_back(decryptedChar);
+        } else {
+            std::cerr << "Decryption error: " << std::endl;
+        }
+    }
+    std::cout << "Decrypted message: ";
+    for (auto c : decryptedMessage) {
+        std::cout << c;
+    }
+    std::cout << std::endl;
+    printHorizontalLine();
+    /*std::cout << "debug" << std::endl;
+    std::cout << "actual private key :: " << t0Keys.k_d << std::endl;
+    std::cout << "decrypted private key :: " << dec << std::endl;
+    */
+    (void) dec;
+    (void) message;
     (void) t0Keys;
     (void) t1Keys;
+    (void) encryptedMessage;
 }
 
 
 int main() {
+    // Creating local variables
     std::mutex sharedMutex;
     KeyPair t0Keys, t1Keys;
+    std::vector<uint64_t> encryptedMessage;
+
+    std::string message = "Hello world";
+
+    // Generating keyPair information for our threads
     t0Keys = generateKeyPair(255);
     t1Keys = generateKeyPair(255);
     int keySent = 0;
-    std::thread t0(clientThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent));
-    std::thread t1(serverThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent));
+    
+    // Starting the multithreading
+    std::thread t0(clientThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent), message, std::ref(encryptedMessage));
+    std::thread t1(serverThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent), message, std::ref(encryptedMessage));
+
+
+    // Waiting for threads to finish
     t0.join();
     t1.join();
-
 }
+
 
