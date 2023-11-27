@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <vector>
+#include <thread>
 
 // The output of a public-private key pair generator
 struct KeyPair {
@@ -229,52 +230,26 @@ StatusOr<uint64_t> decrypt(uint64_t c, uint64_t n, uint64_t k_d) {
    return decrypted_message;
 }
 
-int main() {
-    KeyPair keyPair = generateKeyPair(255);
-    std::string message = "Hello World!";
-    uint64_t k_e = keyPair.k_e;
-    uint64_t k_d = keyPair.k_d;
-    uint64_t n = keyPair.n;
-    std::vector<uint64_t> encryptedMessage;
-    std::vector<char> decryptedMessage;
-    for (auto ch : message) {
-        uint64_t temp = static_cast<uint64_t>(ch);
-        
-        // encrypting to statusor
-        StatusOr<uint64_t> result = encrypt(temp, n, k_e);
-
-        // Checking statusor value
-        if (result.has_value()) {
-            // pushing to result vector
-            encryptedMessage.push_back(result.value());
-        } else {
-            std::cerr << "Encryption error: " << std::endl;
-            return 1; 
-        }
-    }
-   std::cout << "Encrypted message: ";
-   for (auto itc : encryptedMessage) {
-        std::cout << itc;
-    }
-   std::cout << std::endl;
-
-   for (uint64_t encryptedValue : encryptedMessage) {
-        StatusOr<uint64_t> decryptResult = decrypt(encryptedValue, n, k_d);
-        if (decryptResult.has_value()) {
-            char decryptedChar = static_cast<char>(decryptResult.value());
-            decryptedMessage.push_back(decryptedChar);
-        } else {
-            std::cerr << "Decryption error: " << std::endl;
-            return 1; 
-        }
-    }
-    std::cout << "Decrypted message: ";
-    for (auto c : decryptedMessage) {
-        std::cout << c;
-    }
-    std::cout << std::endl;
-    
-    // Message to be encrypted and decrypted
-    // End of scope
-    return 0;
+void clientThread() {
+    KeyPair temp = generateKeyPair(255);
+    std::cout << "clientThread() :: t0 starting" << std::endl;
+    (void) temp;
 }
+
+void serverThread() {
+    KeyPair temp = generateKeyPair(255);
+    std::cout << "serverThread() :: t1 starting" << std::endl;
+    (void) temp;
+}
+
+
+int main() {
+
+    std::thread t0(clientThread);
+    std::thread t1(serverThread);
+
+    t0.join();
+    t1.join();
+
+}
+
