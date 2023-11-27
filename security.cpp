@@ -10,6 +10,7 @@
 #include <ctime>
 #include <vector>
 #include <thread>
+#include <mutex>
 
 // The output of a public-private key pair generator
 struct KeyPair {
@@ -230,23 +231,30 @@ StatusOr<uint64_t> decrypt(uint64_t c, uint64_t n, uint64_t k_d) {
    return decrypted_message;
 }
 
-void clientThread() {
+void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys) {
     KeyPair temp = generateKeyPair(255);
+    std::unique_lock<std::mutex> lock(sharedMutex);
     std::cout << "clientThread() :: t0 starting" << std::endl;
     (void) temp;
+    (void) t0Keys;
+    (void) t1Keys;
 }
 
-void serverThread() {
+void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys) {
     KeyPair temp = generateKeyPair(255);
+    std::unique_lock<std::mutex> lock(sharedMutex);
     std::cout << "serverThread() :: t1 starting" << std::endl;
+    (void) t0Keys;
+    (void) t1Keys;
     (void) temp;
 }
 
 
 int main() {
-
-    std::thread t0(clientThread);
-    std::thread t1(serverThread);
+    std::mutex sharedMutex;
+    KeyPair t0Keys, t1Keys;
+    std::thread t0(clientThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys));
+    std::thread t1(serverThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys));
 
     t0.join();
     t1.join();
