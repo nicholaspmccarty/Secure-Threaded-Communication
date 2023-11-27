@@ -231,31 +231,37 @@ StatusOr<uint64_t> decrypt(uint64_t c, uint64_t n, uint64_t k_d) {
    return decrypted_message;
 }
 
-void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys) {
-    KeyPair temp = generateKeyPair(255);
+void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent) {
     std::unique_lock<std::mutex> lock(sharedMutex);
     std::cout << "clientThread() :: t0 starting" << std::endl;
-    (void) temp;
+    StatusOr<uint64_t> encryptedKey = encrypt(t0Keys.k_d, t0Keys.n, t1Keys.k_e);
+    if (encryptedKey.has_value()) {
+        std::cout << "Sending key: " << encryptedKey.value() << std::endl;
+        keySent = static_cast<int>(encryptedKey.value());
+    } else {
+        std::cerr << "Error encrypting key: " << static_cast<int>(encryptedKey.error()) << std::endl;
+    }
     (void) t0Keys;
     (void) t1Keys;
 }
 
-void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys) {
-    KeyPair temp = generateKeyPair(255);
+void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent) {
     std::unique_lock<std::mutex> lock(sharedMutex);
     std::cout << "serverThread() :: t1 starting" << std::endl;
+    std::cout << "Recieving key::  " << keySent << std::endl;
     (void) t0Keys;
     (void) t1Keys;
-    (void) temp;
 }
 
 
 int main() {
     std::mutex sharedMutex;
     KeyPair t0Keys, t1Keys;
-    std::thread t0(clientThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys));
-    std::thread t1(serverThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys));
-
+    t0Keys = generateKeyPair(255);
+    t1Keys = generateKeyPair(255);
+    int keySent = 0;
+    std::thread t0(clientThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent));
+    std::thread t1(serverThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent));
     t0.join();
     t1.join();
 
