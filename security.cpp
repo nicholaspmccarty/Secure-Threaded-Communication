@@ -46,6 +46,8 @@ enum class [[nodiscard]] Status {
     data_loss_error
 };
 
+
+// Declaring global condition_variables for lock & unlock. 
 std::condition_variable cv;
 bool clientDone = false;
 
@@ -293,9 +295,7 @@ void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int
     std::cout << "Decrypting:: WAIT" << std::endl;
     uint64_t dec; 
     StatusOr<uint64_t> decryptedKey = decrypt(static_cast<uint64_t>(keySent), t0Keys.n, t1Keys.k_d);
-    if (decryptedKey.has_value()) {
-        dec = decryptedKey.value();
-    }
+    dec = decryptedKey.value();
      for (uint64_t encryptedValue : encryptedMessage) {
         StatusOr<uint64_t> decryptResult = decrypt(encryptedValue, t0Keys.n, t0Keys.k_d);
         if (decryptResult.has_value()) {
