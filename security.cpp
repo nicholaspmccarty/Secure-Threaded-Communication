@@ -53,6 +53,9 @@ bool clientDone = false;
 
 template <typename T>
 using StatusOr = std::expected<T, Status>;
+Status shiftAndAddRandomChar(uint32_t &num);
+Status undoShiftAndRemoveRandomChar(uint32_t &num);
+Status printBytes(uint32_t num);
 
 /**
  * @brief Compute base^exponent mod modulus without needing to calculate base^exponent (very large)
@@ -211,9 +214,14 @@ StatusOr<uint64_t> encrypt(uint64_t m, uint64_t n, uint64_t k_e) {
     if (m > n) {
         return std::unexpected(Status::data_loss_error);
     }
+    uint32_t temper = static_cast<uint32_t>(m);
+    (void) shiftAndAddRandomChar(temper);
+    (void) undoShiftAndRemoveRandomChar(temper);
+    uint64_t ret = static_cast<uint64_t>(temper);
+    (void) ret;
     
     // return mod_exp
-    return mod_exp(m, k_e, n);
+    return mod_exp(ret, k_e, n);
 
     // end of scope
 
@@ -231,9 +239,13 @@ StatusOr<uint64_t> decrypt(uint64_t c, uint64_t n, uint64_t k_d) {
     if (c > n) {
         return std::unexpected(Status::data_loss_error);
     }
-
-   uint64_t decrypted_message = mod_exp(c, k_d, n);
-   return decrypted_message;
+    
+    uint32_t temper = static_cast<uint32_t>(c);
+    (void) shiftAndAddRandomChar(temper);
+    (void )undoShiftAndRemoveRandomChar(temper);
+    uint64_t ret = static_cast<uint64_t>(temper);
+    uint64_t decrypted_message = mod_exp(ret, k_d, n);
+    return decrypted_message;
 }
 
 
@@ -311,10 +323,6 @@ void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int
     }
     std::cout << std::endl;
     printHorizontalLine();
-    /*std::cout << "debug" << std::endl;
-    std::cout << "actual private key :: " << t0Keys.k_d << std::endl;
-    std::cout << "decrypted private key :: " << dec << std::endl;
-    */
     (void) dec;
     (void) message;
     (void) t0Keys;
@@ -323,27 +331,81 @@ void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int
 }
 
 
-int main() {
+Status printBytes(uint32_t num) {
+    // Obtain a pointer to the memory occupied by the int64_t
+    uint8_t* bytePtr = reinterpret_cast<uint8_t*>(&num);
+    // Print each byte in big-endian order
+    std::cout << "Byte representation of " << num << ": ";
+    for (int32_t i = static_cast<int32_t>(sizeof(int32_t)) - 1; i >= 0; --i) {
+        std::cout << static_cast<int>(bytePtr[i]) << " ";
+    }
+    std::cout << std::endl;
+    return Status::ok;
+}
+
+Status shiftAndAddRandomChar(uint32_t &num) {
+    // Shifting the number one bit to the left
+    num <<= 8;
+    char leftChar = 'K';
+    char rightChar = 'k';
+    num |= static_cast<uint32_t>(leftChar);
+    num |= static_cast<uint32_t>(rightChar);
+    return Status::ok;
+}
+Status undoShiftAndRemoveRandomChar(uint32_t &num) {
+    // Shift the number one byte to the right
+    num >>= 8;
+    // Removing the leftmost byte
+    num &= ~(static_cast<int32_t>(0xFF) << (8 * (sizeof(int32_t) - 1)));
+    return Status::ok;
+}
+
+int main(int argc, char *argv[]) {
+    bool run = true;
+    // Grab input from the user
+      std::string ourBigVariable;
+      if (argc > 1) {
+        // Concatenate command line arguments into a string
+       
+        for (int i = 1; i < argc; ++i) {
+            ourBigVariable += argv[i];
+            // Add a space between arguments if not the last one
+            if (i < argc - 1) {
+                ourBigVariable += ' ';
+            }
+        }
+        std::cout << "Our Big Variable: " << ourBigVariable << std::endl;
+    } else {
+        std::cout << "It is required that you enter a message." << std::endl;
+        run = false;
+    }
+    
+    
+    if  (run) {
     // Creating local variables
     std::mutex sharedMutex;
     KeyPair t0Keys, t1Keys;
     std::vector<uint64_t> encryptedMessage;
 
-    std::string message = "Hello world";
+    std::string message = ourBigVariable;
 
     // Generating keyPair information for our threads
     t0Keys = generateKeyPair(255);
     t1Keys = generateKeyPair(255);
     int keySent = 0;
-    
+    // uint32_t temp = 3333222;
+   
     // Starting the multithreading
     std::thread t0(clientThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent), message, std::ref(encryptedMessage));
     std::thread t1(serverThread, std::ref(sharedMutex), std::ref(t0Keys), std::ref(t1Keys), std::ref(keySent), message, std::ref(encryptedMessage));
-
-
+    
     // Waiting for threads to finish
     t0.join();
     t1.join();
+    std::cout << "Note: Each character encrypted is shifted once over to the left and surrounded by characters. Then, it is unshifted for decryption. " << std::endl;
+    std::cout << "Please check shiftAndAddRandomChar and the opposite undoShift method" << std::endl;
+    }
+   
 }
 
 
