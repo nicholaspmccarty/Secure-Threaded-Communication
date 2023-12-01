@@ -1,6 +1,6 @@
 // Nicholas McCarty
 // CSE 381
-// Working with key pairs & asymmetrically encrypting messages. 
+// Systems 2 Final Assigment    
 #include <cstdint>
 #include <iostream> 
 #include <expected>
@@ -253,7 +253,7 @@ void printHorizontalLine() {
     std::cout << "-------------------------------------------------------------" << std::endl;
 }
 
-void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent, std::string message, std::vector<uint64_t>& encryptedMessage) {
+Status clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent, std::string message, std::vector<uint64_t>& encryptedMessage) {
     std::unique_lock<std::mutex> lock(sharedMutex);
     printHorizontalLine();
     std::cout << "clientThread() :: t0 starting" << std::endl;
@@ -263,6 +263,7 @@ void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int
         keySent = static_cast<int>(encryptedKey.value());
     } else {
         std::cerr << "Error encrypting key:: " << static_cast<int>(encryptedKey.error()) << std::endl;
+        return Status::unexpected_condition;
     }
     
     std::cout << "Encrypting message:: " << message << std::endl;
@@ -290,10 +291,12 @@ void clientThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int
     (void) message;
     (void) t0Keys;
     (void) t1Keys;
+    return Status::ok;
+    
 }
 
 
-void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent, std::string message, std::vector<uint64_t>& encryptedMessage) {
+Status serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int& keySent, std::string message, std::vector<uint64_t>& encryptedMessage) {
     std::unique_lock<std::mutex> lock(sharedMutex);
     cv.wait(lock, [&] { return clientDone; });
     std::cout << "serverThread() :: t1 starting" << std::endl;
@@ -328,6 +331,7 @@ void serverThread(std::mutex &sharedMutex, KeyPair& t0Keys, KeyPair& t1Keys, int
     (void) t0Keys;
     (void) t1Keys;
     (void) encryptedMessage;
+    return Status::ok;
 }
 
 
